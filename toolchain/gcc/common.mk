@@ -1,7 +1,7 @@
 #
 # Copyright (C) 2002-2003 Erik Andersen <andersen@uclibc.org>
 # Copyright (C) 2004 Manuel Novoa III <mjn3@uclibc.org>
-# Copyright (C) 2005-2006 Felix Fietkau <nbd@openwrt.org>
+# Copyright (C) 2005-2006 Felix Fietkau <nbd@nbd.name>
 # Copyright (C) 2006-2014 OpenWrt.org
 #
 # This program is free software; you can redistribute it and/or modify
@@ -28,12 +28,12 @@ GCC_DIR:=$(PKG_NAME)-$(PKG_VERSION)
 PKG_SOURCE_URL:=@GNU/gcc/gcc-$(PKG_VERSION)
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
 
-ifeq ($(PKG_VERSION),4.8.5)
-    PKG_MD5SUM:=80d2c2982a3392bb0b89673ff136e223
+ifeq ($(PKG_VERSION),5.4.0)
+  PKG_HASH:=608df76dec2d34de6558249d8af4cbee21eceddbcb580d666f7a5a583ca3303a
 endif
 
-ifeq ($(PKG_VERSION),5.3.0)
-    PKG_MD5SUM:=c9616fd448f980259c31de613e575719
+ifeq ($(PKG_VERSION),6.3.0)
+  PKG_HASH:=f06ae7f3f790fbf0f018f6d40e844451e6bc3b7bc96e128e63b09825c1f8b29f
 endif
 
 PATCH_DIR=../patches/$(GCC_VERSION)
@@ -61,6 +61,12 @@ HOST_STAMP_INSTALLED:=$(STAGING_DIR_HOST)/stamp/.gcc_$(GCC_VARIANT)_installed
 SEP:=,
 TARGET_LANGUAGES:="c,c++$(if $(CONFIG_INSTALL_LIBGCJ),$(SEP)java)$(if $(CONFIG_INSTALL_GFORTRAN),$(SEP)fortran)$(if $(CONFIG_INSTALL_GCCGO),$(SEP)go)"
 
+TAR_OPTIONS += --exclude='gcc/testsuite/*' --exclude=gcc/ada/*.ad*
+
+ifndef CONFIG_INSTALL_LIBGCJ
+  TAR_OPTIONS += --exclude=libjava
+endif
+
 export libgcc_cv_fixed_point=no
 ifdef CONFIG_USE_UCLIBC
   export glibcxx_cv_c99_math_tr1=no
@@ -84,6 +90,7 @@ GCC_CONFIGURE:= \
 		--disable-libgomp \
 		--disable-libmudflap \
 		--disable-multilib \
+		--disable-libmpx \
 		--disable-nls \
 		$(GRAPHITE_CONFIGURE) \
 		--with-host-libstdcxx=-lstdc++ \
@@ -105,12 +112,6 @@ ifneq ($(CONFIG_SSP_SUPPORT),)
 else
   GCC_CONFIGURE+= \
 		--disable-libssp
-endif
-
-ifneq ($(CONFIG_GCC_USE_GRAPHITE),)
-  GCC_CONFIGURE+= \
-		--with-cloog=$(TOPDIR)/staging_dir/host \
-		--with-isl=$(TOPDIR)/staging_dir/host
 endif
 
 ifneq ($(CONFIG_EXTRA_TARGET_ARCH),)

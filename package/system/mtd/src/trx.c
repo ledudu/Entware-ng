@@ -2,7 +2,7 @@
  * trx.c
  *
  * Copyright (C) 2005 Mike Baker
- * Copyright (C) 2008 Felix Fietkau <nbd@openwrt.org>
+ * Copyright (C) 2008 Felix Fietkau <nbd@nbd.name>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -81,6 +81,7 @@ trx_fixup(int fd, const char *name)
 	ptr = mmap(NULL, len, PROT_READ|PROT_WRITE, MAP_SHARED, bfd, 0);
 	if (!ptr || (ptr == (void *) -1)) {
 		perror("mmap");
+		fprintf(stderr, "Mapping the TRX header failed\n");
 		goto err1;
 	}
 
@@ -100,7 +101,6 @@ trx_fixup(int fd, const char *name)
 err1:
 	close(bfd);
 err:
-	fprintf(stderr, "Error fixing up TRX header\n");
 	return -1;
 }
 

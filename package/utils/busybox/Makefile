@@ -8,14 +8,14 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=busybox
-PKG_VERSION:=1.24.2
-PKG_RELEASE:=1
+PKG_VERSION:=1.27.2
+PKG_RELEASE:=2
 PKG_FLAGS:=essential
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
-PKG_SOURCE_URL:=http://www.busybox.net/downloads \
-		http://distfiles.gentoo.org/distfiles/
-PKG_MD5SUM:=2eaae519cac1143bcf583636a745381f
+PKG_SOURCE_URL:=https://www.busybox.net/downloads \
+		http://sources.buildroot.net
+PKG_HASH:=9d4be516b61e6480f156b11eb42577a13529f75d3383850bb75c50c285de63df
 
 PKG_BUILD_DEPENDS:=BUSYBOX_CONFIG_PAM:libpam
 PKG_BUILD_PARALLEL:=1
@@ -23,11 +23,12 @@ PKG_CHECK_FORMAT_SECURITY:=0
 
 PKG_LICENSE:=GPL-2.0
 PKG_LICENSE_FILES:=LICENSE archival/libarchive/bz/LICENSE
+PKG_CPE_ID:=cpe:/a:busybox:busybox
 
 include $(INCLUDE_DIR)/package.mk
 
 ifeq ($(DUMP),)
-  STAMP_CONFIGURED:=$(strip $(STAMP_CONFIGURED))_$(shell $(SH_FUNC) grep '^CONFIG_BUSYBOX_' $(TOPDIR)/.config | md5s)
+  STAMP_CONFIGURED:=$(strip $(STAMP_CONFIGURED))_$(shell grep '^CONFIG_BUSYBOX_' $(TOPDIR)/.config | mkhash md5)
 endif
 
 ifneq ($(findstring c,$(OPENWRT_VERBOSE)),)
@@ -36,10 +37,13 @@ else
   BB_MAKE_VERBOSE :=
 endif
 
+BUSYBOX_SYM=$(if $(CONFIG_BUSYBOX_CUSTOM),CONFIG,DEFAULT)
+BUSYBOX_IF_ENABLED=$(if $(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_$(1)),$(2))
+
 define Package/busybox
   SECTION:=base
   CATEGORY:=Base system
-  MAINTAINER:=Felix Fietkau <nbd@openwrt.org>
+  MAINTAINER:=Felix Fietkau <nbd@nbd.name>
   TITLE:=Core utilities for embedded Linux
   URL:=http://busybox.net/
   DEPENDS:=+BUSYBOX_CONFIG_PAM:libpam
@@ -54,8 +58,6 @@ endef
 define Package/busybox/config
 	source "$(SOURCE)/Config.in"
 endef
-
-BUSYBOX_SYM=$(if $(CONFIG_BUSYBOX_CUSTOM),CONFIG,DEFAULT)
 
 # don't create a version string containing the actual timestamp
 export KCONFIG_NOTIMESTAMP=1
@@ -82,6 +84,12 @@ ifdef CONFIG_BUSYBOX_CONFIG_PAM
   TARGET_CFLAGS += -I$(STAGING_DIR)/opt/include
   export LDFLAGS=$(TARGET_LDFLAGS)
   LDLIBS += pam pam_misc pthread
+endif
+
+ifdef CONFIG_BUSYBOX_DEFAULT_NSLOOKUP_LEDE
+  ifeq ($(CONFIG_USE_GLIBC),y)
+	LDLIBS += resolv
+  endif
 endif
 
 define Build/Compile

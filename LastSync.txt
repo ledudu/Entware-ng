@@ -1,6 +1,6 @@
-commit a4953d94d3a5f86658dd8d210356ff35849a6e31
-Author: rmilecki <rmilecki@3c298f89-4303-0410-b956-a3cf2f4a3e73>
-Date:   Mon May 9 18:10:35 2016 +0000
+commit 9f8d28285d569f28ad3db9b2cbb61814b2c90fdc
+Author: John Crispin <john@phrozen.org>
+Date:   Thu Dec 14 10:58:15 2017 +0100
 
-    mtd: add -c option for specifying amount of data to be used for checksum
+    Revert "ar71xx: TL-WR1043N v4/v5: add orange WAN LED support"
     

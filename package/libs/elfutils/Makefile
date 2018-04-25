@@ -1,5 +1,6 @@
 #
 # Copyright (C) 2010-2014 OpenWrt.org
+# Copyright (C) 2016-2017 Luiz Angelo Daros de Luca <luizluca@gmail.com>
 #
 # This is free software, licensed under the GNU General Public License v2.
 # See /LICENSE for more information.
@@ -7,20 +8,21 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=elfutils
-PKG_VERSION:=0.165
+PKG_VERSION:=0.169
 PKG_RELEASE:=1
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
-PKG_SOURCE_URL:=http://fedorahosted.org/releases/e/l/$(PKG_NAME)/$(PKG_VERSION)
-PKG_MD5SUM:=c37fdbe18e848002b451562cba964679
+PKG_SOURCE_URL:=https://sourceware.org/$(PKG_NAME)/ftp/$(PKG_VERSION)
+PKG_HASH:=9412fac7b30872b738bc1ed1ebcaed54493c26ef9a67887913498c17b10f3bc2
 PKG_MAINTAINER:=Luiz Angelo Daros de Luca <luizluca@gmail.com>
 PKG_LICENSE:=GPL-3.0+
 PKG_LICENSE_FILES:=COPYING COPYING-GPLV2 COPYING-LGPLV3
+PKG_CPE_ID:=cpe:/a:elfutils_project:elfutils
 
 PKG_INSTALL:=1
 PKG_USE_MIPS16:=0
 
-PKG_BUILD_DEPENDS:=USE_MUSL:argp-standalone
+PKG_BUILD_DEPENDS:=USE_UCLIBC:argp-standalone USE_MUSL:argp-standalone
 
 include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/nls.mk
@@ -35,7 +37,7 @@ endef
 define Package/libasm
   $(call Package/elfutils/Default)
   TITLE+= (libasm)
-  DEPENDS:=libelf1
+  DEPENDS:=libelf1 +libdw
 endef
 
 define Package/libdw
@@ -54,10 +56,6 @@ ifeq ($(CONFIG_BUILD_NLS),y)
 TARGET_LDFLAGS += "-lintl"
 endif
 
-ifdef CONFIG_USE_UCLIBC
-CONFIGURE_VARS += \
-	LIBS="-luargp"
-endif
 
 ifdef CONFIG_USE_MUSL
 CONFIGURE_VARS += \
@@ -65,8 +63,9 @@ CONFIGURE_VARS += \
 endif
 
 CONFIGURE_ARGS += \
-	--disable-werror \
 	--without-lzma
+
+TARGET_CFLAGS += -D_GNU_SOURCE -Wno-unused-result
 
 define Build/InstallDev
 	$(INSTALL_DIR) $(1)/opt/include

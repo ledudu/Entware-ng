@@ -2,7 +2,7 @@ package metadata;
 use base 'Exporter';
 use strict;
 use warnings;
-our @EXPORT = qw(%package %srcpackage %category %subdir %preconfig %features %overrides clear_packages parse_package_metadata parse_target_metadata get_multiline @ignore);
+our @EXPORT = qw(%package %srcpackage %category %subdir %preconfig %features %overrides clear_packages parse_package_metadata parse_target_metadata get_multiline @ignore %usernames %groupnames);
 
 our %package;
 our %preconfig;
@@ -12,6 +12,11 @@ our %subdir;
 our %features;
 our %overrides;
 our @ignore;
+
+our %usernames;
+our %groupnames;
+our %userids;
+our %groupids;
 
 sub get_multiline {
 	my $fh = shift;
@@ -29,6 +34,58 @@ sub confstr($) {
 	my $conf = shift;
 	$conf =~ tr#/\.\-/#___#;
 	return $conf;
+}
+
+sub parse_package_metadata_usergroup($$$$$) {
+	my $makefile = shift;
+	my $typename = shift;
+	my $names = shift;
+	my $ids = shift;
+	my $spec = shift;
+	my $name;
+	my $id;
+
+	# the regex for name is taken from is_valid_name() of package shadow
+	if ($spec =~ /^([a-z_][a-z0-9_-]*\$?)$/) {
+		$name = $spec;
+		$id = -1;
+	} elsif ($spec =~ /^([a-z_][a-z0-9_-]*\$?)=(\d+)$/) {
+		$name = $1;
+		$id = $2;
+	} else {
+		warn "$makefile: invalid $typename spec $spec\n";
+		return 0;
+	}
+
+	if ($id =~ /^[1-9]\d*$/) {
+		if ($id >= 65536) {
+			warn "$makefile: $typename $name id $id >= 65536";
+			return 0;
+		}
+		if (not exists $ids->{$id}) {
+			$ids->{$id} = {
+				name => $name,
+				makefile => $makefile,
+			};
+		} elsif ($ids->{$id}{name} ne $name) {
+			warn "$makefile: $typename $name id $id is already taken by $ids->{$id}{makefile}\n";
+			return 0;
+		}
+	} elsif ($id != -1) {
+		warn "$makefile: $typename $name has invalid id $id\n";
+		return 0;
+	}
+
+	if (not exists $names->{$name}) {
+		$names->{$name} = {
+			id => $id,
+			makefile => $makefile,
+		};
+	} elsif ($names->{$name}{id} != $id) {
+		warn "$makefile: id of $typename $name collides with that defined defined in $names->{$name}{makefile}\n";
+		return 0;
+	}
+	return 1;
 }
 
 sub parse_target_metadata($) {
@@ -68,7 +125,6 @@ sub parse_target_metadata($) {
 			}
 		};
 		/^Target-Name:\s*(.+)\s*$/ and $target->{name} = $1;
-		/^Target-Path:\s*(.+)\s*$/ and $target->{path} = $1;
 		/^Target-Arch:\s*(.+)\s*$/ and $target->{arch} = $1;
 		/^Target-Arch-Packages:\s*(.+)\s*$/ and $target->{arch_packages} = $1;
 		/^Target-Features:\s*(.+)\s*$/ and $target->{features} = [ split(/\s+/, $1) ];
@@ -85,15 +141,19 @@ sub parse_target_metadata($) {
 			$profile = {
 				id => $1,
 				name => $1,
+				priority => 999,
 				packages => []
 			};
+			$1 =~ /^DEVICE_/ and $target->{has_devices} = 1;
 			push @{$target->{profiles}}, $profile;
 		};
 		/^Target-Profile-Name:\s*(.+)\s*$/ and $profile->{name} = $1;
+		/^Target-Profile-Priority:\s*(\d+)\s*$/ and do {
+			$profile->{priority} = $1;
+			$target->{sort} = 1;
+		};
 		/^Target-Profile-Packages:\s*(.*)\s*$/ and $profile->{packages} = [ split(/\s+/, $1) ];
 		/^Target-Profile-Description:\s*(.*)\s*/ and $profile->{desc} = get_multiline(*FILE);
-		/^Target-Profile-Config:/ and $profile->{config} = get_multiline(*FILE, "\t");
-		/^Target-Profile-Kconfig:/ and $profile->{kconfig} = 1;
 	}
 	close FILE;
 	foreach my $target (@target) {
@@ -108,6 +168,11 @@ sub parse_target_metadata($) {
 				packages => []
 			}
 		];
+
+		$target->{sort} and @{$target->{profiles}} = sort {
+			$a->{priority} <=> $b->{priority} or
+			$a->{name} cmp $b->{name};
+		} @{$target->{profiles}};
 	}
 	return @target;
 }
@@ -120,6 +185,8 @@ sub clear_packages() {
 	%category = ();
 	%features = ();
 	%overrides = ();
+	%usernames = ();
+	%groupnames = ();
 }
 
 sub parse_package_metadata($) {
@@ -154,10 +221,10 @@ sub parse_package_metadata($) {
 			$overrides{$src} = 1;
 		};
 		next unless $src;
-		next if $ignore{$src};
 		/^Package:\s*(.+?)\s*$/ and do {
 			undef $feature;
 			$pkg = {};
+			$pkg->{ignore} = $ignore{$src};
 			$pkg->{src} = $src;
 			$pkg->{makefile} = $makefile;
 			$pkg->{name} = $1;
@@ -181,7 +248,7 @@ sub parse_package_metadata($) {
 		$feature and do {
 			/^Target-Name:\s*(.+?)\s*$/ and do {
 				$features{$1} or $features{$1} = [];
-				push @{$features{$1}}, $feature;
+				push @{$features{$1}}, $feature unless $ignore{$src};
 			};
 			/^Target-Title:\s*(.+?)\s*$/ and $feature->{target_title} = $1;
 			/^Feature-Priority:\s*(\d+)\s*$/ and $feature->{priority} = $1;
@@ -222,7 +289,7 @@ sub parse_package_metadata($) {
 		/^Build-Depends: \s*(.+)\s*$/ and $pkg->{builddepends} = [ split /\s+/, $1 ];
 		/^Build-Depends\/(\w+): \s*(.+)\s*$/ and $pkg->{"builddepends/$1"} = [ split /\s+/, $2 ];
 		/^Build-Types:\s*(.+)\s*$/ and $pkg->{buildtypes} = [ split /\s+/, $1 ];
-		/^Package-Subdir:\s*(.+?)\s*$/ and $pkg->{package_subdir} = $1;
+		/^Repository:\s*(.+?)\s*$/ and $pkg->{repository} = $1;
 		/^Category: \s*(.+)\s*$/ and do {
 			$pkg->{category} = $1;
 			defined $category{$1} or $category{$1} = {};
@@ -248,12 +315,23 @@ sub parse_package_metadata($) {
 				$preconfig = {
 					id => $1
 				};
-				$preconfig{$pkgname}->{$1} = $preconfig;
+				$preconfig{$pkgname}->{$1} = $preconfig unless $ignore{$src};
 			}
 		};
 		/^Preconfig-Type:\s*(.*?)\s*$/ and $preconfig->{type} = $1;
 		/^Preconfig-Label:\s*(.*?)\s*$/ and $preconfig->{label} = $1;
 		/^Preconfig-Default:\s*(.*?)\s*$/ and $preconfig->{default} = $1;
+		/^Require-User:\s*(.*?)\s*$/ and do {
+			my @ugspecs = split /\s+/, $1;
+
+			for my $ugspec (@ugspecs) {
+				my @ugspec = split /:/, $ugspec, 2;
+				parse_package_metadata_usergroup($makefile, "user", \%usernames, \%userids, $ugspec[0]) or return 0;
+				if (@ugspec > 1) {
+					parse_package_metadata_usergroup($makefile, "group", \%groupnames, \%groupids, $ugspec[1]) or return 0;
+				}
+			}
+		};
 	}
 	close FILE;
 	return 1;

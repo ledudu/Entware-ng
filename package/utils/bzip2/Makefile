@@ -9,15 +9,16 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=bzip2
 PKG_VERSION:=1.0.6
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=http://www.bzip.org/$(PKG_VERSION)
-PKG_MD5SUM:=00b516f4704d4a7cb50a1d97e6e8e15b
+PKG_HASH:=a2848f34fcd5d6cf47def00461fcb528a0484d8edef8208d6d2e2909dc61d9cd
 PKG_MAINTAINER:=Steven Barth <cyrus@openwrt.org>
 
 PKG_LICENSE:=BZIP2
 PKG_LICENSE_FILES:=LICENSE
+PKG_CPE_ID:=cpe:/a:bzip:bzip2
 
 include $(INCLUDE_DIR)/host-build.mk
 include $(INCLUDE_DIR)/package.mk
@@ -57,6 +58,8 @@ TARGET_CFLAGS += \
 	$(FPIC) \
 	$(TARGET_LDFLAGS)
 
+CONFIGURE_ARGS += --prefix=/opt
+
 MAKE_FLAGS += \
 	-f Makefile-libbz2_so \
 	CFLAGS="$(TARGET_CFLAGS)" \
@@ -91,11 +94,11 @@ HOST_MAKE_FLAGS+= \
 	all
 
 HOST_CONFIGURE_ARGS+= \
-	--prefix=$(STAGING_DIR)/host
+	--prefix=$(STAGING_DIR_HOSTPKG)
 
 define Host/Install
-	$(INSTALL_DIR) $(STAGING_DIR)/host/bin/
-	$(MAKE) -C $(HOST_BUILD_DIR) PREFIX=$(STAGING_DIR)/host/ install
+	$(INSTALL_DIR) $(STAGING_DIR_HOSTPKG)/bin/
+	$(MAKE) -C $(HOST_BUILD_DIR) PREFIX=$(STAGING_DIR_HOSTPKG)/ install
 endef
 
 $(eval $(call HostBuild))

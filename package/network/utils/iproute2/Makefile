@@ -4,16 +4,20 @@
 # This is free software, licensed under the GNU General Public License v2.
 # See /LICENSE for more information.
 #
+# Entware comment
+# We will keep this version because arm feed use 3.2 kernel. 
+# We use 3.2 kernels because Synology still use it on arm NASes.
+#
 
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=iproute2
 PKG_VERSION:=4.4.0
-PKG_RELEASE:=1
+PKG_RELEASE:=10
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.xz
-PKG_SOURCE_URL:=http://kernel.org/pub/linux/utils/net/iproute2/
-PKG_MD5SUM:=d762653ec3e1ab0d4a9689e169ca184f
+PKG_SOURCE_URL:=@KERNEL/linux/utils/net/iproute2
+PKG_HASH:=bc91c367288a19f78ef800cd6840363be1f22da8436fbae88e1a7250490d6514
 PKG_BUILD_PARALLEL:=1
 PKG_LICENSE:=GPL-2.0
 
@@ -22,27 +26,33 @@ PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(BUILD_VARIANT)/$(PKG_NAME)-$(PKG_VERSI
 include $(INCLUDE_DIR)/package.mk
 
 define Package/iproute2/Default
-  TITLE:=Routing control utility ($(2))
   SECTION:=net
   CATEGORY:=Network
   URL:=http://www.linuxfoundation.org/collaborate/workgroups/networking/iproute2
   SUBMENU:=Routing and Redirection
   MAINTAINER:=Russell Senior <russell@personaltelco.net>
   DEPENDS:= +libnl-tiny
-  VARIANT:=$(1)
 endef
 
-define Package/ip
-$(call Package/iproute2/Default,tiny,Minimal)
-  CONFLICTS:=ip-full
+define Package/ip-tiny
+$(call Package/iproute2/Default)
+ TITLE:=Routing control utility (Minimal)
+ VARIANT:=tiny
+ PROVIDES:=ip
+ ALTERNATIVES:=200:/sbin/ip:/sbin/ip-tiny
 endef
 
-Package/ip-full=$(call Package/iproute2/Default,full,Full)
+define Package/ip-full
+$(call Package/iproute2/Default)
+ TITLE:=Routing control utility (Full)
+ VARIANT:=full
+ PROVIDES:=ip
+ ALTERNATIVES:=300:/sbin/ip:/sbin/ip-full
+endef
 
 define Package/tc
 $(call Package/iproute2/Default)
   TITLE:=Traffic control utility
-  DEPENDS:=+kmod-sched-core
 endef
 
 define Package/genl
@@ -75,7 +85,7 @@ define Build/Configure
 		$(PKG_BUILD_DIR)/Makefile
 	$(SED) "s,^LIBC_INCLUDE.*,LIBC_INCLUDE=$(STAGING_DIR)/include," \
 		$(PKG_BUILD_DIR)/Makefile
-	echo "static const char SNAPSHOT[] = \"$(PKG_VERSION)-$(PKG_RELEASE)-openwrt\";" \
+	echo "static const char SNAPSHOT[] = \"$(PKG_VERSION)-$(PKG_RELEASE)-entware\";" \
 		> $(PKG_BUILD_DIR)/include/SNAPSHOT.h
 endef
 
@@ -83,11 +93,12 @@ TARGET_CFLAGS += -DHAVE_SETNS
 TARGET_CFLAGS += -ffunction-sections -fdata-sections
 
 MAKE_FLAGS += \
-	EXTRA_CCOPTS="$(TARGET_CFLAGS) -I../include -I$(STAGING_DIR)/usr/include/libnl-tiny" \
+	EXTRA_CCOPTS="$(TARGET_CFLAGS) -I../include -I$(STAGING_DIR)/opt/include/libnl-tiny" \
 	KERNEL_INCLUDE="$(LINUX_DIR)/include" \
 	SHARED_LIBS="" \
 	LDFLAGS="$(TARGET_LDFLAGS) -Wl,--gc-sections" \
 	IP_CONFIG_TINY=$(IP_CONFIG_TINY) \
+	CONFDIR="/opt/etc/iproute2" \
 	FPIC="$(FPIC)"
 
 define Build/Compile
@@ -95,50 +106,55 @@ define Build/Compile
 endef
 
 define Build/InstallDev
-	$(INSTALL_DIR) $(1)/usr/include
-	$(CP) $(PKG_BUILD_DIR)/include/libnetlink.h $(1)/usr/include/
-	$(INSTALL_DIR) $(1)/usr/lib
-	$(CP) $(PKG_BUILD_DIR)/lib/libnetlink.a $(1)/usr/lib/
+	$(INSTALL_DIR) $(1)/opt/include
+	$(CP) $(PKG_BUILD_DIR)/include/{libgenl,libnetlink,ll_map}.h $(1)/opt/include/
+	$(INSTALL_DIR) $(1)/opt/lib
+	$(CP) $(PKG_BUILD_DIR)/lib/libnetlink.a $(1)/opt/lib/
 endef
 
-define Package/ip/install
-	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/ip/ip $(1)/usr/bin/
+define Package/ip-tiny/install
+	$(INSTALL_DIR) $(1)/opt/sbin
+	$(INSTALL_DIR) $(1)/opt/etc/iproute2
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/ip/ip $(1)/opt/sbin/
 endef
 
 define Package/ip-full/install
-	$(INSTALL_DIR) $(1)/usr/sbin
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/ip/ip $(1)/usr/sbin/
+	$(INSTALL_DIR) $(1)/opt/sbin
+	$(INSTALL_DIR) $(1)/opt/etc/iproute2
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/ip/ip $(1)/opt/sbin/
 endef
 
 define Package/tc/install
-	$(INSTALL_DIR) $(1)/usr/sbin
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/tc/tc $(1)/usr/sbin/
-	$(INSTALL_DIR) $(1)/etc/hotplug.d/iface
-	$(INSTALL_BIN) ./files/15-teql $(1)/etc/hotplug.d/iface/
+	$(INSTALL_DIR) $(1)/opt/sbin
+	$(INSTALL_DIR) $(1)/opt/etc/iproute2
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/tc/tc $(1)/opt/sbin/
 endef
 
 define Package/genl/install
-	$(INSTALL_DIR) $(1)/usr/sbin
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/genl/genl $(1)/usr/sbin/
+	$(INSTALL_DIR) $(1)/opt/sbin
+	$(INSTALL_DIR) $(1)/opt/etc/iproute2
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/genl/genl $(1)/opt/sbin/
 endef
 
 define Package/ip-bridge/install
-	$(INSTALL_DIR) $(1)/usr/sbin
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/bridge/bridge $(1)/usr/sbin/
+	$(INSTALL_DIR) $(1)/opt/sbin
+	$(INSTALL_DIR) $(1)/opt/etc/iproute2
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/bridge/bridge $(1)/opt/sbin/
 endef
 
 define Package/ss/install
-	$(INSTALL_DIR) $(1)/usr/sbin
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/misc/ss $(1)/usr/sbin/
+	$(INSTALL_DIR) $(1)/opt/sbin
+	$(INSTALL_DIR) $(1)/opt/etc/iproute2
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/misc/ss $(1)/opt/sbin/
 endef
 
 define Package/nstat/install
-	$(INSTALL_DIR) $(1)/usr/sbin
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/misc/nstat $(1)/usr/sbin/
+	$(INSTALL_DIR) $(1)/opt/sbin
+	$(INSTALL_DIR) $(1)/opt/etc/iproute2
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/misc/nstat $(1)/opt/sbin/
 endef
 
-$(eval $(call BuildPackage,ip))
+$(eval $(call BuildPackage,ip-tiny))
 $(eval $(call BuildPackage,ip-full))
 $(eval $(call BuildPackage,tc))
 $(eval $(call BuildPackage,genl))

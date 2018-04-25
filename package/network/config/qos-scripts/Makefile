@@ -10,8 +10,9 @@ include $(TOPDIR)/rules.mk
 PKG_NAME:=qos-scripts
 PKG_VERSION:=1.3.0
 PKG_RELEASE:=1
+PKG_LICENSE:=GPL-2.0
 
-PKG_MAINTAINER:=Felix Fietkau <nbd@openwrt.org>
+PKG_MAINTAINER:=Felix Fietkau <nbd@nbd.name>
 
 PKG_BUILD_DIR := $(BUILD_DIR)/$(PKG_NAME)
 

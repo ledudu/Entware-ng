@@ -4,18 +4,22 @@
 # This is free software, licensed under the GNU General Public License v2.
 # See /LICENSE for more information.
 #
-# Upgraded from 5.9. ncurses-bin package added.
+# opkg binary segfaults when a real package is replaced by "provided" package.
+# we removed PROVIDES libncurses field in libncursesw and added a real libncurses package that
+# installes symlinks. We've added more symlinks to make binaries from older packages to be compatible with
+# the new libncurses(w) package.
+# Our patch set is different from LEDE for historical reason, it will be merged after next uptade in LEDE
 
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=ncurses
 PKG_VERSION:=6.0
-PKG_RELEASE:=1
+PKG_RELEASE:=1c
 
-PKG_BUILD_DIR:=$(BUILD_DIR)/$(BUILD_VARIANT)/$(PKG_NAME)-$(PKG_VERSION)
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=@GNU/ncurses
-PKG_MD5SUM:=ee13d052e1ead260d7c28071f46eefb1
+PKG_HASH:=f551c24b30ce8bfb6e96d9f59b42fbea30fa3a6123384172f9e7284bcf647260
 
 PKG_LICENSE:=MIT
 PKG_LICENSE_FILES:=README
@@ -28,21 +32,11 @@ PKG_BUILD_DEPENDS:=ncurses/host
 include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/host-build.mk
 
-define Package/libncurses
-  SECTION:=libs
-  CATEGORY:=Libraries
-  TITLE:=Terminal handling library
-  URL:=http://www.gnu.org/software/ncurses/
-  DEPENDS:= +terminfo
-  VARIANT:=libncurses
-endef
-
 define Package/terminfo
   SECTION:=libs
   CATEGORY:=Libraries
   TITLE:=Terminal Info Database (ncurses)
   URL:=http://www.gnu.org/software/ncurses/
-  VARIANT:=libncurses
 endef
 
 define Package/libncursesw
@@ -50,17 +44,24 @@ define Package/libncursesw
   CATEGORY:=Libraries
   TITLE:=Terminal handling library (Unicode)
   URL:=http://www.gnu.org/software/ncurses/
-  VARIANT:=libncursesw
+  DEPENDS:= +terminfo
+endef
+
+define Package/libncurses
+  SECTION:=libs
+  CATEGORY:=Libraries
+  TITLE:=Terminal handling library
+  URL:=http://www.gnu.org/software/ncurses/
+  DEPENDS:= +libncursesw
 endef
 
 define Package/ncurses-bin
   SECTION:=utils
   CATEGORY:=Utilities
   SUBMENU:=Terminal
-  DEPENDS:=+libncurses
+  DEPENDS:=+libncursesw
   TITLE:=Terminal-related programs
   URL:=http://www.gnu.org/software/ncurses/
-  VARIANT:=libncurses
 endef
 
 TARGET_CFLAGS += $(FPIC)
@@ -69,6 +70,7 @@ CONFIGURE_ARGS += \
 	--enable-echo \
 	--enable-const \
 	--enable-overwrite \
+	--enable-pc-files \
 	--enable-rpath \
 	--disable-rpath-hack \
 	--without-ada \
@@ -81,7 +83,10 @@ CONFIGURE_ARGS += \
 	--with-normal \
 	--with-shared \
 	--with-terminfo-dirs=/opt/share/terminfo \
-	--with-default-terminfo-dir=/opt/share/terminfo
+	--with-default-terminfo-dir=/opt/share/terminfo \
+	--with-pkg-config-libdir=/opt/lib/pkgconfig \
+	--enable-widec \
+	--with-build-cppflags=-D_GNU_SOURCE
 
 HOST_CONFIGURE_ARGS += \
 	--without-cxx \
@@ -99,16 +104,11 @@ ifeq ($(HOST_OS),FreeBSD)
 		--with-terminfo=/opt/share/terminfo.db 
 endif
 
-ifeq ($(BUILD_VARIANT),libncursesw)
-	CONFIGURE_ARGS += \
-		--enable-widec \
-		--with-build-cppflags=-D_GNU_SOURCE
-endif
-
 MAKE_FLAGS += \
 	BUILD_CC="$(HOSTCC)" \
 	HOSTCC="$(HOSTCC)" \
 	HOSTCCFLAGS="" \
+	PKG_CONFIG_LIBDIR=/opt/lib/pkgconfig \
 	libs \
 	progs
 
@@ -149,46 +149,35 @@ define Package/terminfo/postinst
 grep -q "^export TERMINFO" /opt/etc/profile || echo "export TERMINFO=/opt/share/terminfo" >> /opt/etc/profile
 endef
 
-define Package/libncurses/install
-	$(INSTALL_DIR) $(1)/opt/lib
-	$(CP) $(PKG_INSTALL_DIR)/opt/lib/lib{curses,ncurses,panel,menu,form}.so* $(1)/opt/lib/
-endef
-
 define Package/libncursesw/install
 	$(INSTALL_DIR) $(1)/opt/lib
-	$(CP) $(PKG_INSTALL_DIR)/opt/lib/lib{ncurses,panel,menu,form}w.so* $(1)/opt/lib/
+	for lib in ncurses panel menu form; do \
+		$(CP) $(PKG_INSTALL_DIR)/opt/lib/lib$$$${lib}w.so* $(1)/opt/lib/; \
+	done
 endef
 
-ifeq ($(BUILD_VARIANT),libncursesw)
-define Build/InstallDev
-	$(INSTALL_DIR) $(1)/opt/include/ncursesw/
-	$(CP) $(PKG_INSTALL_DIR)/opt/include/*.h $(1)/opt/include/ncursesw/
-
+define Package/libncurses/install
 	$(INSTALL_DIR) $(1)/opt/lib
-	$(CP) $(PKG_INSTALL_DIR)/opt/lib/lib{ncurses,panel,menu,form}w.{a,so*} $(1)/opt/lib/
+	ln -s libncurses.so.6.0 $(1)/opt/lib/libcurses.so
+	for lib in ncurses panel menu form; do \
+		ln -s lib$$$${lib}w.so $(1)/opt/lib/lib$$$${lib}.so; \
+		ln -s lib$$$${lib}w.so.6 $(1)/opt/lib/lib$$$${lib}.so.6; \
+		ln -s lib$$$${lib}w.so.6.0 $(1)/opt/lib/lib$$$${lib}.so.6.0; \
+	done
+endef
 
+define Build/InstallDev
+	$(CP) $(PKG_INSTALL_DIR)/* $(1)
+		for lib in ncurses panel menu form; do \
+		ln -s lib$$$${lib}w.so $(1)/opt/lib/lib$$$${lib}.so; \
+	done
+	$(LN) . $(1)/opt/include/ncursesw
 	$(INSTALL_DIR) $(1)/opt/bin $(2)/bin
 	$(CP) $(PKG_INSTALL_DIR)/opt/bin/ncursesw6-config $(2)/bin/
 	$(SED) 's,^\(prefix\|exec_prefix\)=.*,\1=$(STAGING_DIR)/opt,g' -e 's/$$$$INCS //g' \
 		$(2)/bin/ncursesw6-config
 	$(LN) $(STAGING_DIR)/host/bin/ncursesw6-config $(1)/opt/bin/ncursesw6-config
 endef
-else
-define Build/InstallDev
-	$(INSTALL_DIR) $(1)/opt/include
-	$(CP) $(PKG_INSTALL_DIR)/opt/include/*.h $(1)/opt/include/
-
-	$(INSTALL_DIR) $(1)/opt/lib
-	$(CP) $(PKG_INSTALL_DIR)/opt/lib/lib{curses,ncurses,panel,menu,form}.{a,so*} $(1)/opt/lib/
-
-	$(INSTALL_DIR) $(1)/opt/bin $(2)/bin
-	$(CP) $(PKG_INSTALL_DIR)/opt/bin/ncurses6-config $(2)/bin/
-	$(SED) 's,^\(prefix\|exec_prefix\)=.*,\1=$(STAGING_DIR)/opt,g' \
-		$(2)/bin/ncurses6-config
-	$(LN) $(STAGING_DIR)/host/bin/ncurses6-config $(1)/opt/bin/ncurses6-config
-endef
-endif
-
 
 define Host/Compile
 	$(MAKE) -C $(HOST_BUILD_DIR) libs
@@ -201,6 +190,6 @@ endef
 
 $(eval $(call HostBuild))
 $(eval $(call BuildPackage,terminfo))
-$(eval $(call BuildPackage,libncurses))
 $(eval $(call BuildPackage,libncursesw))
+$(eval $(call BuildPackage,libncurses))
 $(eval $(call BuildPackage,ncurses-bin))

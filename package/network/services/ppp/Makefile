@@ -10,13 +10,14 @@ include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME:=ppp
 PKG_VERSION:=2.4.7
-PKG_RELEASE:=9
+PKG_RELEASE:=12
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://download.samba.org/pub/ppp/
-PKG_MD5SUM:=78818f40e6d33a1d1de68a1551f6595a
-PKG_MAINTAINER:=Felix Fietkau <nbd@openwrt.org>
+PKG_HASH:=02e0a3dd3e4799e33103f70ec7df75348c8540966ee7c948e4ed8a42bbccfb30
+PKG_MAINTAINER:=Felix Fietkau <nbd@nbd.name>
 PKG_LICENSE:=BSD-4-Clause
+PKG_CPE_ID:=cpe:/a:samba:ppp
 
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(BUILD_VARIANT)/$(PKG_NAME)-$(PKG_VERSION)
 
@@ -30,7 +31,7 @@ include $(INCLUDE_DIR)/package.mk
 define Package/ppp/Default
   SECTION:=net
   CATEGORY:=Network
-  URL:=http://ppp.samba.org/
+  URL:=https://ppp.samba.org/
 endef
 
 define Package/ppp
@@ -97,7 +98,7 @@ endef
 
 define Package/ppp-mod-pppol2tp
 $(call Package/ppp/Default)
-  DEPENDS:=@(PACKAGE_ppp||PACKAGE_ppp-multilink) 
+  DEPENDS:=@(PACKAGE_ppp||PACKAGE_ppp-multilink)
   TITLE:=PPPoL2TP plugin
 endef
 
@@ -156,7 +157,20 @@ define Package/pppstats/description
 This package contains an utility to report PPP statistics.
 endef
 
-# for 2.6 kernels ????
+define Package/pppoe-discovery
+$(call Package/ppp/Default)
+  DEPENDS:=@(PACKAGE_ppp||PACKAGE_ppp-multilink) +ppp-mod-pppoe
+  TITLE:=Perform a PPPoE-discovery process
+endef
+
+define Package/pppoe-discovery/description
+This tool performs the same discovery process as pppoe, but does
+not initiate a session. Can be useful to debug pppoe.
+endef
+
+
+
+# for 2.6 kernels ???? no, 3.4 also
 LINUX_UAPI_DIR=""
 
 
@@ -172,6 +186,9 @@ $(call Build/Configure/Default,, \
 		$(LINUX_DIR)/include/$(LINUX_UAPI_DIR)linux/atm*.h \
 		$(PKG_BUILD_DIR)/pppd/plugins/pppoatm/linux/
 endef
+
+TARGET_CFLAGS += -ffunction-sections -fdata-sections
+TARGET_LDFLAGS += -Wl,--gc-sections
 
 MAKE_FLAGS += COPTS="$(TARGET_CFLAGS) -I$(STAGING_DIR)/opt/include" \
 		PRECOMPILED_FILTER=1 \
@@ -212,8 +229,6 @@ define Package/ppp-mod-pppoe/install
 	$(INSTALL_DIR) $(1)/opt/lib/pppd/$(PKG_VERSION)
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/lib/pppd/$(PKG_VERSION)/rp-pppoe.so \
 		$(1)/opt/lib/pppd/$(PKG_VERSION)/
-	$(INSTALL_DIR) $(1)/opt/sbin
-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/sbin/pppoe-discovery $(1)/opt/sbin/
 
 endef
 
@@ -265,6 +280,11 @@ define Package/pppstats/install
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/sbin/pppstats $(1)/opt/sbin/
 endef
 
+define Package/pppoe-discovery/install
+	$(INSTALL_DIR) $(1)/opt/sbin
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/sbin/pppoe-discovery $(1)/opt/sbin/
+endef
+
 $(eval $(call BuildPackage,ppp))
 $(eval $(call BuildPackage,ppp-multilink))
 $(eval $(call BuildPackage,ppp-mod-pppoa))
@@ -276,3 +296,4 @@ $(eval $(call BuildPackage,ppp-mod-passwordfd))
 $(eval $(call BuildPackage,chat))
 $(eval $(call BuildPackage,pppdump))
 $(eval $(call BuildPackage,pppstats))
+$(eval $(call BuildPackage,pppoe-discovery))

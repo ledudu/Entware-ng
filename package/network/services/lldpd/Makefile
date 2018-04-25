@@ -8,14 +8,14 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=lldpd
-PKG_VERSION:=0.9.0
+PKG_VERSION:=0.9.9
 PKG_RELEASE:=1
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=http://media.luffy.cx/files/lldpd
-PKG_MD5SUM:=ed0226129b0c90b3a45c273fe1aba8de
+PKG_HASH:=5e9e08f500d21376631cbc9f8e19a4b167cd38eb2d8fd9e660b8e80507f802db
 
-PKG_MAINTAINER:=Jo-Philipp Wich <jow@openwrt.org>
+PKG_MAINTAINER:=Stijn Tintel <stijn@linux-ipv6.be>
 PKG_LICENSE:=ISC
 
 PKG_FIXUP:=autoreconf
@@ -31,7 +31,7 @@ define Package/lldpd
   SUBMENU:=Routing and Redirection
   TITLE:=Link Layer Discovery Protocol daemon
   URL:=https://github.com/vincentbernat/lldpd/wiki
-  DEPENDS:=+libevent2 +USE_GLIBC:libbsd +LLDPD_WITH_JSON:libjson-c
+  DEPENDS:=+libevent2 +LLDPD_WITH_JSON:libjson-c +LLDPD_WITH_SNMP:libnetsnmp
   USERID:=lldp=121:lldp=129
   MENU:=1
 endef
@@ -50,50 +50,32 @@ define Package/lldpd/description
 endef
 
 define Build/InstallDev
-	$(INSTALL_DIR) $(1)/usr/lib
-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/liblldpctl.so* $(1)/usr/lib/
-	$(INSTALL_DIR) $(1)/usr/include
-	$(CP) $(PKG_INSTALL_DIR)/usr/include/lldpctl.h $(1)/usr/include/lldpctl.h
-	$(CP) $(PKG_INSTALL_DIR)/usr/include/lldp-const.h $(1)/usr/include/lldp-const.h
+	$(INSTALL_DIR) $(1)/opt/lib
+	$(CP) $(PKG_INSTALL_DIR)/opt/lib/liblldpctl.so* $(1)/opt/lib/
+	$(INSTALL_DIR) $(1)/opt/include
+	$(CP) $(PKG_INSTALL_DIR)/opt/include/lldpctl.h $(1)/opt/include/lldpctl.h
+	$(CP) $(PKG_INSTALL_DIR)/opt/include/lldp-const.h $(1)/opt/include/lldp-const.h
 endef
 
 define Package/lldpd/install
-	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_DIR) $(1)/etc/lldpd.d
-	$(INSTALL_DIR) $(1)/etc/config
-	$(INSTALL_DIR) $(1)/usr/lib $(1)/usr/sbin
-	$(CP) $(PKG_INSTALL_DIR)/usr/sbin/lldp{cli,ctl,d} $(1)/usr/sbin/
-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/liblldpctl.so* $(1)/usr/lib/
-	$(INSTALL_BIN) ./files/lldpd.init $(1)/etc/init.d/lldpd
-	$(INSTALL_DATA) ./files/lldpd.config $(1)/etc/config/lldpd
-ifneq ($(CONFIG_LLDPD_WITH_CDP),y)
-	sed -i -e '/cdp/d' $(1)/etc/init.d/lldpd $(1)/etc/config/lldpd
-endif
-ifneq ($(CONFIG_LLDPD_WITH_FDP),y)
-	sed -i -e '/fdp/d' $(1)/etc/init.d/lldpd $(1)/etc/config/lldpd
-endif
-ifneq ($(CONFIG_LLDPD_WITH_EDP),y)
-	sed -i -e '/edp/d' $(1)/etc/init.d/lldpd $(1)/etc/config/lldpd
-endif
-ifneq ($(CONFIG_LLDPD_WITH_SONMP),y)
-	sed -i -e '/sonmp/d' $(1)/etc/init.d/lldpd $(1)/etc/config/lldpd
-endif
-endef
-
-define Package/lldpd/conffiles
-/etc/config/lldpd
+	$(INSTALL_DIR) $(1)/opt/etc/lldpd.d
+	$(INSTALL_DIR) $(1)/opt/lib $(1)/opt/sbin
+	$(CP) $(PKG_INSTALL_DIR)/opt/sbin/lldp{cli,ctl,d} $(1)/opt/sbin/
+	$(CP) $(PKG_INSTALL_DIR)/opt/lib/liblldpctl.so* $(1)/opt/lib/
 endef
 
 CONFIGURE_ARGS += \
 	$(if $(CONFIG_LLDPD_WITH_PRIVSEP), \
 	--with-privsep-user=lldp \
 	--with-privsep-group=lldp \
-	--with-privsep-chroot=/var/run/lldp \
+	--with-privsep-chroot=/opt/var/run/lldp \
 	,--disable-privsep) \
 	--with-readline=no \
 	--with-embedded-libevent=no \
 	--disable-hardening \
 	--without-xml \
+	--sysconfdir=/tmp \
+	--enable-oldies \
 	$(if $(CONFIG_LLDPD_WITH_CDP),,--disable-cdp) \
 	$(if $(CONFIG_LLDPD_WITH_FDP),,--disable-fdp) \
 	$(if $(CONFIG_LLDPD_WITH_EDP),,--disable-edp) \
@@ -102,7 +84,8 @@ CONFIGURE_ARGS += \
 	$(if $(CONFIG_LLDPD_WITH_DOT3),,--disable-dot3) \
 	$(if $(CONFIG_LLDPD_WITH_CUSTOM),,--disable-custom) \
 	$(if $(CONFIG_LLDPD_WITH_SONMP),,--disable-sonmp) \
-	$(if $(CONFIG_LLDPD_WITH_JSON),--with-json=json-c,--with-json=no)
+	$(if $(CONFIG_LLDPD_WITH_JSON),--with-json=json-c,--with-json=no) \
+	$(if $(CONFIG_LLDPD_WITH_SNMP),--with-snmp,)
 
 
 $(eval $(call BuildPackage,lldpd))

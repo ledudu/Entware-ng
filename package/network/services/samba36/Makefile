@@ -4,23 +4,22 @@
 # This is free software, licensed under the GNU General Public License v2.
 # See /LICENSE for more information.
 #
-# more binaries are added to server and client packages (as in debian)
+# more binaries are added to server and client packages (as in Debian)
 
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=samba
 PKG_VERSION:=3.6.25
-PKG_RELEASE:=5
+PKG_RELEASE:=9
 
-PKG_SOURCE_URL:=http://ftp.samba.org/pub/samba \
-	http://ftp.samba.org/pub/samba/stable
+PKG_SOURCE_URL:=https://download.samba.org/pub/samba \
+		https://download.samba.org/pub/samba/stable
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
-PKG_MD5SUM:=76da2fa64edd94a0188531e7ecb27c4e
+PKG_HASH:=8f2c8a7f2bd89b0dfd228ed917815852f7c625b2bc0936304ac3ed63aaf83751
 
 PKG_LICENSE:=GPL-3.0
 PKG_LICENSE_FILES:=COPYING
-
-PKG_MAINTAINER:=Felix Fietkau <nbd@openwrt.org>
+PKG_CPE_ID:=cpe:/a:samba:samba
 
 PKG_BUILD_PARALLEL:=1
 
@@ -31,19 +30,29 @@ CONFIGURE_PATH:=source3
 
 PKG_BUILD_BIN:=$(PKG_BUILD_DIR)/$(MAKE_PATH)/bin
 
-define Package/samba36-server
+define Package/samba/Default
   SECTION:=net
   CATEGORY:=Network
-  TITLE:=Samba 3.6 SMB/CIFS server
-  URL:=http://www.samba.org/
+  TITLE:=Samba 3.6 SMB/CIFS
+  URL:=https://www.samba.org/
+  MAINTAINER:=Felix Fietkau <nbd@nbd.name>
+endef
+
+define Package/samba36-server
+  $(call Package/samba/Default)
+  TITLE+= server
   DEPENDS:=+USE_GLIBC:librt $(ICONV_DEPENDS)
 endef
 
 define Package/samba36-client
-  SECTION:=net
-  CATEGORY:=Network
-  TITLE:=Samba 3.6 SMB/CIFS client
-  URL:=http://www.samba.org/
+  $(call Package/samba/Default)
+  TITLE+= client
+  DEPENDS:=+libreadline +libncurses
+endef
+
+define Package/samba36-net
+  $(call Package/samba/Default)
+  TITLE+= net commands
   DEPENDS:=+libreadline +libncurses
 endef
 
@@ -52,7 +61,6 @@ define Package/samba36-server/config
 		int "Maximum level of compiled-in debug messages"
 		depends on PACKAGE_samba36-server || PACKAGE_samba36-client
 		default -1
-
 endef
 
 define Package/samba36-server/description
@@ -83,6 +91,7 @@ CONFIGURE_VARS += \
 	samba_cv_USE_SETRESUID=yes \
 	samba_cv_have_setreuid=yes \
 	samba_cv_have_setresuid=yes \
+	ac_cv_header_libunwind_h=no \
 	ac_cv_header_zlib_h=no \
 	samba_cv_zlib_1_2_3=no \
 	ac_cv_path_PYTHON="" \
@@ -91,6 +100,7 @@ CONFIGURE_VARS += \
 CONFIGURE_ARGS += \
 	--exec-prefix=/opt \
 	--prefix=/ \
+	--enable-external-libtdb=no \
 	--disable-avahi \
 	--disable-cups \
 	--disable-pie \
@@ -145,25 +155,26 @@ define Package/samba36-server/install
 	$(LN) samba_multicall $(1)/opt/sbin/smbd
 	$(LN) samba_multicall $(1)/opt/sbin/nmbd
 	$(LN) samba_multicall $(1)/opt/sbin/smbpasswd
-	$(INSTALL_BIN) $(PKG_BUILD_BIN)/smbstatus $(1)/opt/sbin
-	$(INSTALL_BIN) $(PKG_BUILD_BIN)/pdbedit $(1)/opt/sbin
-	$(INSTALL_BIN) $(PKG_BUILD_BIN)/eventlogadm $(1)/opt/sbin
-	$(INSTALL_BIN) $(PKG_BUILD_BIN)/profiles $(1)/opt/sbin
-	$(INSTALL_BIN) $(PKG_BUILD_BIN)/tdbbackup $(1)/opt/sbin
+	$(INSTALL_BIN) \
+	    $(PKG_BUILD_BIN)/{smbstatus,pdbedit,eventlogadm,profiles,tdbbackup} \
+	    $(1)/opt/sbin
 	$(INSTALL_DIR) $(1)/opt/var/nmbd
 endef
 
 define Package/samba36-client/install
 	$(INSTALL_DIR) $(1)/opt/sbin
-	$(INSTALL_BIN) $(PKG_BUILD_BIN)/smbclient $(1)/opt/sbin
-	$(INSTALL_BIN) $(PKG_BUILD_BIN)/nmblookup $(1)/opt/sbin
-	$(INSTALL_BIN) $(PKG_BUILD_BIN)/smbcacls $(1)/opt/sbin
-	$(INSTALL_BIN) $(PKG_BUILD_BIN)/smbcquotas $(1)/opt/sbin
-	$(INSTALL_BIN) $(PKG_BUILD_BIN)/smbget $(1)/opt/sbin
-	$(INSTALL_BIN) $(PKG_BUILD_BIN)/smbspool $(1)/opt/sbin
-	$(INSTALL_BIN) $(PKG_BUILD_BIN)/smbtree $(1)/opt/sbin
+	$(INSTALL_BIN) \
+	    $(PKG_BUILD_BIN)/nmblookup \
+	    $(PKG_BUILD_BIN)/smb{client,cacls,cquotas,get,spool,tree} \
+	    $(1)/opt/sbin
+endef
+
+define Package/samba36-net/install
+	$(INSTALL_DIR) $(1)/opt/sbin
+	$(INSTALL_BIN) $(PKG_BUILD_BIN)/net $(1)/opt/sbin
 endef
 
 $(eval $(call BuildPackage,samba36-client))
 $(eval $(call BuildPackage,samba36-server))
+$(eval $(call BuildPackage,samba36-net))
 
